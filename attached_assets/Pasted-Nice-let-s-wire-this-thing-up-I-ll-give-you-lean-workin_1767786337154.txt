@@ -1,0 +1,307 @@
+Nice—let’s wire this thing up.
+
+I’ll give you **lean, working starter code** for the core pieces so an engineer can clone this repo and start iterating. This won’t be a full model implementation (you’ll plug in F5‑TTS/OpenVoice/etc.), but all the **plumbing, interfaces, and flow** will be in place.
+
+---
+
+### 1. `engine/models/tts_model.py`
+
+```python
+# engine/models/tts_model.py
+
+from typing import Tuple
+import numpy as np
+
+class TTSModel:
+    def __init__(self, checkpoint_path: str):
+        # TODO: load your real model here (F5-TTS, OpenVoice, etc.)
+        self.checkpoint_path = checkpoint_path
+
+    @classmethod
+    def load(cls, checkpoint_path: str) -> "TTSModel":
+        return cls(checkpoint_path)
+
+    def generate(
+        self,
+        text: str,
+        speaker_embedding: np.ndarray,
+        language: str = "en",
+        style: str = "neutral",
+    ) -> Tuple[np.ndarray, int]:
+        """
+        Stub: replace with real model inference.
+        Returns: (audio_samples, sample_rate)
+        """
+        sr = 22050
+        # Fake audio: 1 second of silence
+        audio = np.zeros(sr, dtype=np.float32)
+        return audio, sr
+```
+
+---
+
+### 2. `engine/models/speaker_encoder.py`
+
+```python
+# engine/models/speaker_encoder.py
+
+import numpy as np
+import torchaudio
+
+class SpeakerEncoder:
+    def __init__(self, checkpoint_path: str):
+        self.checkpoint_path = checkpoint_path
+        # TODO: load real encoder
+
+    @classmethod
+    def load(cls, checkpoint_path: str) -> "SpeakerEncoder":
+        return cls(checkpoint_path)
+
+    def embed_utterance(self, audio_path: str) -> np.ndarray:
+        wav, sr = torchaudio.load(audio_path)
+        # TODO: real embedding logic
+        return np.random.randn(256).astype(np.float32)
+```
+
+---
+
+### 3. `engine/inference/tts_inference.py`
+
+```python
+# engine/inference/tts_inference.py
+
+import soundfile as sf
+from typing import Optional
+import numpy as np
+
+from engine.models.tts_model import TTSModel
+from engine.models.speaker_encoder import SpeakerEncoder
+
+tts_model = TTSModel.load("checkpoints/tts_model.pt")
+speaker_encoder = SpeakerEncoder.load("checkpoints/speaker_encoder.pt")
+
+def synthesize_to_file(
+    text: str,
+    reference_audio: Optional[str],
+    out_path: str,
+    language: str = "en",
+    style: str = "neutral",
+):
+    if reference_audio:
+        speaker_embedding = speaker_encoder.embed_utterance(reference_audio)
+    else:
+        speaker_embedding = np.zeros(256, dtype=np.float32)
+
+    audio, sr = tts_model.generate(
+        text=text,
+        speaker_embedding=speaker_embedding,
+        language=language,
+        style=style,
+    )
+    sf.write(out_path, audio, sr)
+    return out_path
+```
+
+---
+
+### 4. `engine/inference/voice_changer.py`
+
+```python
+# engine/inference/voice_changer.py
+
+from engine.inference.tts_inference import tts_model
+from engine.models.speaker_encoder import SpeakerEncoder
+from engine.utils.audio import transcribe_with_whisper
+import soundfile as sf
+
+speaker_encoder = SpeakerEncoder.load("checkpoints/speaker_encoder.pt")
+
+def change_voice(
+    input_audio_path: str,
+    target_reference_audio: str,
+    out_path: str,
+    language: str = "en",
+):
+    transcript = transcribe_with_whisper(input_audio_path)
+    target_embedding = speaker_encoder.embed_utterance(target_reference_audio)
+
+    audio, sr = tts_model.generate(
+        text=transcript,
+        speaker_embedding=target_embedding,
+        language=language,
+        style="original_like",
+    )
+    sf.write(out_path, audio, sr)
+    return out_path
+```
+
+---
+
+### 5. `engine/utils/audio.py`
+
+```python
+# engine/utils/audio.py
+
+import torchaudio
+
+def load_wav(path: str, target_sr: int = 16000):
+    wav, sr = torchaudio.load(path)
+    if sr != target_sr:
+        wav = torchaudio.functional.resample(wav, sr, target_sr)
+    return wav, target_sr
+
+def transcribe_with_whisper(audio_path: str) -> str:
+    # TODO: integrate OpenAI Whisper or other ASR
+    return "This is a placeholder transcript."
+```
+
+---
+
+### 6. `api/schemas/tts_schema.py`
+
+```python
+# api/schemas/tts_schema.py
+
+from pydantic import BaseModel
+
+class TTSRequest(BaseModel):
+    voice_id: str | None = None
+    reference_audio_path: str | None = None
+    text: str
+    language: str = "en"
+    style: str = "neutral"
+
+class TTSJobResponse(BaseModel):
+    job_id: str
+    status: str
+    audio_url: str | None = None
+```
+
+---
+
+### 7. `api/services/job_queue.py`
+
+```python
+# api/services/job_queue.py
+
+import uuid
+from typing import Dict
+
+# In-memory job store for starter; replace with Redis/Celery
+_jobs: Dict[str, dict] = {}
+
+def create_job(payload: dict) -> str:
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "queued", "payload": payload, "audio_path": None}
+    return job_id
+
+def set_job_result(job_id: str, audio_path: str):
+    if job_id in _jobs:
+        _jobs[job_id]["status"] = "completed"
+        _jobs[job_id]["audio_path"] = audio_path
+
+def get_job(job_id: str) -> dict | None:
+    return _jobs.get(job_id)
+```
+
+---
+
+### 8. `workers/tasks/tts_task.py`
+
+```python
+# workers/tasks/tts_task.py
+
+import os
+from engine.inference.tts_inference import synthesize_to_file
+from api.services.job_queue import set_job_result
+
+OUTPUT_DIR = "storage/outputs"
+
+def run_tts_job(job_id: str, payload: dict):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out_path = os.path.join(OUTPUT_DIR, f"{job_id}.wav")
+
+    synthesize_to_file(
+        text=payload["text"],
+        reference_audio=payload.get("reference_audio_path"),
+        out_path=out_path,
+        language=payload.get("language", "en"),
+        style=payload.get("style", "neutral"),
+    )
+
+    set_job_result(job_id, out_path)
+```
+
+---
+
+### 9. `api/main.py` (FastAPI entrypoint)
+
+```python
+# api/main.py
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from api.schemas.tts_schema import TTSRequest, TTSJobResponse
+from api.services.job_queue import create_job, get_job
+from workers.tasks.tts_task import run_tts_job
+import threading
+
+app = FastAPI(title="Tommy Voice Engine")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.post("/tts", response_model=TTSJobResponse)
+def create_tts(req: TTSRequest):
+    payload = req.dict()
+    job_id = create_job(payload)
+
+    # naive async: run in background thread (replace with Celery/RQ later)
+    threading.Thread(target=run_tts_job, args=(job_id, payload), daemon=True).start()
+
+    return TTSJobResponse(job_id=job_id, status="queued", audio_url=None)
+
+@app.get("/tts/{job_id}", response_model=TTSJobResponse)
+def get_tts(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        return TTSJobResponse(job_id=job_id, status="not_found", audio_url=None)
+
+    audio_url = None
+    if job["audio_path"]:
+        audio_url = f"/static/{job_id}.wav"  # or CDN URL in real deployment
+
+    return TTSJobResponse(job_id=job_id, status=job["status"], audio_url=audio_url)
+```
+
+---
+
+### 10. `config/settings.py`
+
+```python
+# config/settings.py
+
+from pydantic import BaseSettings
+
+class Settings(BaseSettings):
+    MODEL_CHECKPOINT: str = "checkpoints/tts_model.pt"
+    SPEAKER_ENCODER_CHECKPOINT: str = "checkpoints/speaker_encoder.pt"
+    OUTPUT_DIR: str = "storage/outputs"
+    UPLOAD_DIR: str = "storage/uploads"
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+---
+
+If you want, next step we can:
+
+- Design **preset JSONs** for your brand voices and satire personas, or  
+- Sketch the **React UI flow** for “Upload Voice → Name It → Use It in Scripts” so this becomes a real creator tool, not just an engine.

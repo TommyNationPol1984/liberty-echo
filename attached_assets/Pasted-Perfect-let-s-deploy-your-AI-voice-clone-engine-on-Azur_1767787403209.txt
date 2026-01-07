@@ -1,0 +1,179 @@
+Perfect — let’s deploy your AI voice‑clone engine on Azure, using a clean, modern, scalable architecture that mirrors how real AI audio companies run their infrastructure.
+
+This plan is production‑ready, but still simple enough to get running quickly.
+
+☁️ AZURE DEPLOYMENT BLUEPRINT
+Your system will run on:
+
+1. Azure Container Apps (ACA)
+Serverless containers for:
+
+API service (FastAPI)
+
+Worker service (background TTS jobs)
+
+2. Azure Storage Account
+For:
+
+Uploaded reference audio
+
+Generated outputs
+
+Voice embeddings
+
+3. Azure Container Registry (ACR)
+To store your Docker images.
+
+4. Azure Files or Blob Storage
+Shared storage for voices + outputs.
+
+5. Azure Monitor
+Logs + metrics.
+
+This setup is scalable, cost‑efficient, and GPU‑ready if you upgrade later.
+
+🐳 STEP 1 — Push Your Images to Azure Container Registry
+Create ACR
+bash
+az acr create --resource-group TommyVoiceRG \
+  --name TommyVoiceRegistry \
+  --sku Basic
+Login
+bash
+az acr login --name TommyVoiceRegistry
+Tag images
+bash
+docker tag tommy-voice-api TommyVoiceRegistry.azurecr.io/tommy-voice-api:latest
+docker tag tommy-voice-worker TommyVoiceRegistry.azurecr.io/tommy-voice-worker:latest
+Push
+bash
+docker push TommyVoiceRegistry.azurecr.io/tommy-voice-api:latest
+docker push TommyVoiceRegistry.azurecr.io/tommy-voice-worker:latest
+📦 STEP 2 — Create Azure Storage
+Create storage account
+bash
+az storage account create \
+  --name tommyvoicestorage \
+  --resource-group TommyVoiceRG \
+  --location centralus \
+  --sku Standard_LRS
+Create blob containers
+bash
+az storage container create --name uploads --account-name tommyvoicestorage
+az storage container create --name outputs --account-name tommyvoicestorage
+az storage container create --name voices --account-name tommyvoicestorage
+You’ll update your code to use Azure Blob URLs for reading/writing audio.
+
+🧠 STEP 3 — Deploy API to Azure Container Apps
+Create environment
+bash
+az containerapp env create \
+  --name TommyVoiceEnv \
+  --resource-group TommyVoiceRG \
+  --location centralus
+Deploy API service
+bash
+az containerapp create \
+  --name tommy-voice-api \
+  --resource-group TommyVoiceRG \
+  --environment TommyVoiceEnv \
+  --image TommyVoiceRegistry.azurecr.io/tommy-voice-api:latest \
+  --target-port 8000 \
+  --ingress external \
+  --registry-server TommyVoiceRegistry.azurecr.io \
+  --cpu 1 --memory 2Gi \
+  --env-vars STORAGE_ACCOUNT=tommyvoicestorage
+This gives you a public HTTPS endpoint like:
+
+Code
+https://tommy-voice-api.centralus.azurecontainerapps.io
+⚙️ STEP 4 — Deploy Worker Service
+Workers don’t need public ingress.
+
+bash
+az containerapp create \
+  --name tommy-voice-worker \
+  --resource-group TommyVoiceRG \
+  --environment TommyVoiceEnv \
+  --image TommyVoiceRegistry.azurecr.io/tommy-voice-worker:latest \
+  --ingress internal \
+  --registry-server TommyVoiceRegistry.azurecr.io \
+  --cpu 1 --memory 2Gi \
+  --env-vars STORAGE_ACCOUNT=tommyvoicestorage
+The worker will automatically process queued jobs.
+
+🔐 STEP 5 — Connect API + Worker + Storage
+Your API will:
+
+Upload reference audio → Azure Blob
+
+Store embeddings → Azure Blob
+
+Generate TTS → save output → Azure Blob
+
+Return signed URLs to the client
+
+Use azure-storage-blob in Python:
+
+python
+from azure.storage.blob import BlobServiceClient
+
+blob = BlobServiceClient.from_connection_string(os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
+container = blob.get_container_client("outputs")
+
+container.upload_blob(f"{job_id}.wav", audio_bytes)
+🌐 STEP 6 — Custom Domain + HTTPS
+Add domain
+bash
+az containerapp hostname bind \
+  --resource-group TommyVoiceRG \
+  --name tommy-voice-api \
+  --hostname voice.tommy-nation.com \
+  --certificate TommyVoiceCert
+Azure Container Apps automatically handles TLS via Azure Front Door or managed certs.
+
+📈 STEP 7 — Scaling
+API autoscaling
+bash
+az containerapp update \
+  --name tommy-voice-api \
+  --resource-group TommyVoiceRG \
+  --scale-rule-name http-scaling \
+  --scale-rule-type http \
+  --scale-rule-http-concurrency 50 \
+  --min-replicas 1 \
+  --max-replicas 10
+Worker autoscaling (queue depth)
+Once you move to Azure Queue Storage:
+
+bash
+az containerapp update \
+  --name tommy-voice-worker \
+  --resource-group TommyVoiceRG \
+  --scale-rule-name queue-scaling \
+  --scale-rule-type azure-queue \
+  --scale-rule-metadata queueName=tts-jobs \
+  --min-replicas 1 \
+  --max-replicas 10
+🎤 RESULT
+You now have a cloud‑hosted AI voice engine on Azure that:
+
+Accepts voice uploads
+
+Clones voices
+
+Generates multilingual TTS
+
+Runs background narration jobs
+
+Returns audio URLs
+
+Scales automatically
+
+Lives behind your custom domain
+
+This is the same architecture used by real AI audio platforms — just tailored to your brand.
+
+If you want, I can now generate:
+
+→ The Azure‑optimized version of your code (Blob storage, Queue storage, signed URLs)

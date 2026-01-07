@@ -1,0 +1,46 @@
+### Full Figma Prototype — Plan and Timeline
+
+**Summary**  
+I’ll build the complete, production-ready Figma prototype for **Liberty Echo**: component library, annotated screens (MVP → advanced), interactive flows, accessibility notes, developer handoff artifacts, and a prioritized engineering backlog.
+
+---
+
+### Deliverables I will produce
+
+- **Figma file structure**: Tokens, Components, Icons, Screens, Prototypes, Handoff.  
+- **Component library**: Buttons, inputs, file uploader, waveform player, SSML editor, sliders, consent modal, clone card, queue panel, alignment editor, pitch editor, and variants.  
+- **Annotated screens**: Home Dashboard; Create Clone Wizard; Synthesize Text; Dubbing Project; Singing Studio; Admin & Audit.  
+- **Interactive prototypes**: Clickable flows for onboarding, clone creation, streaming synth preview, alignment editing, and singing pitch edits.  
+- **Developer handoff**: CSS token export, component props table, SVG icon set, API contract stubs, and accessibility checklist.  
+- **QA & acceptance**: Test cases, MOS proxy checklist, WER/intelligibility targets, latency SLO verification steps.  
+- **Roadmap & backlog**: Sprint tasks, milestone acceptance criteria, and rough engineering estimates.
+
+---
+
+### Timeline and milestones
+
+- **Week 1 — Foundation**: Tokens, core components, Home Dashboard, Create Clone Wizard (consent + upload analyzer).  
+- **Week 2 — Synth UI**: SSML editor, voice selector, streaming preview, basic controls, render queue.  
+- **Week 3 — Dubbing Alpha**: Upload/transcribe flow, forced-alignment editor, strict/loose timing preview.  
+- **Week 4 — Singing Studio Alpha**: MIDI import, pitch editor, vibrato controls, stems export.  
+- **Week 5 — Admin and Safeguards**: Consent logs, revoke/purge UI, abuse dashboard.  
+- **Week 6 — Polish and Handoff**: Accessibility fixes, performance notes, exportable assets, final handoff package.  
+**Delivery cadence**: Weekly checkpoints with clickable prototypes for review.
+
+---
+
+### What I’ll need from you
+
+- **Brand assets**: logo SVG, color guidelines, typography files (or Figma tokens).  
+- **Figma access**: a Figma team/project invite or the email to invite.  
+- **Priority list**: any must-have presets, languages, or legal copy you want included in the consent flow.  
+- **Sample content**: one example transcript + one short audio sample (for realistic alignment and UI previews).
+
+---
+
+### Next steps and handoff
+
+I’ll start assembling the component library and the Create Clone Wizard first, then iterate weekly with clickable builds and annotated notes for engineers. I’ll include an exportable token file and a developer props table in the final handoff.
+
+**Follow-up action**  
+Invite **my Figma account** or share your **team invite email** and upload the brand assets so I can begin the prototype.

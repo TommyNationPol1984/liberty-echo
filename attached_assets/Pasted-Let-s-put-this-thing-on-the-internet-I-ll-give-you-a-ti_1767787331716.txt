@@ -1,0 +1,137 @@
+Let’s put this thing on the internet.
+
+I’ll give you a tight AWS‑focused cloud deployment plan using containers, with options to scale later. You can adapt the same pattern to Azure or Render if you prefer.
+
+1. Container images
+First, push your images to a registry.
+
+Create ECR repos (for API and worker):
+
+bash
+aws ecr create-repository --repository-name tommy-voice-api
+aws ecr create-repository --repository-name tommy-voice-worker
+Build & tag images:
+
+bash
+docker build -f Dockerfile.api -t tommy-voice-api .
+docker build -f Dockerfile.worker -t tommy-voice-worker .
+Login & push:
+
+bash
+aws ecr get-login-password --region YOUR_REGION | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com
+
+docker tag tommy-voice-api YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/tommy-voice-api:latest
+docker tag tommy-voice-worker YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/tommy-voice-worker:latest
+
+docker push YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/tommy-voice-api:latest
+docker push YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/tommy-voice-worker:latest
+2. Choose a runtime
+Simplest path: AWS ECS on Fargate (serverless containers).
+
+You’ll run:
+
+Service 1: tommy-voice-api (public, HTTP 80/443)
+
+Service 2: tommy-voice-worker (internal, no public port)
+
+Both share:
+
+S3 bucket for storage/ (uploads + outputs)
+
+EFS or S3 for voices/ (embeddings + metadata)
+
+3. Storage setup
+Create S3 bucket (for audio):
+
+bash
+aws s3 mb s3://tommy-voice-storage-YOUR_UNIQUE_SUFFIX
+Update your code to use S3 paths instead of local storage/ for:
+
+Uploads
+
+Outputs
+
+(Use boto3 to upload_file and generate presigned URLs for audio_url.)
+
+4. ECS task definitions
+Define two task definitions:
+
+API task definition
+Image: .../tommy-voice-api:latest
+
+CPU/memory: e.g., 0.5 vCPU / 1GB
+
+Port mapping: container 8000 → load balancer 80
+
+Env vars:
+
+S3_BUCKET=tommy-voice-storage-...
+
+MODEL_CHECKPOINT=/models/... (if using EFS or baked into image)
+
+Worker task definition
+Image: .../tommy-voice-worker:latest
+
+No public port
+
+Same env vars
+
+You can create these via AWS Console or aws ecs register-task-definition.
+
+5. ECS services
+Create an ECS cluster, then:
+
+Service: tommy-voice-api-service
+
+Launch type: Fargate
+
+Desired count: 1+
+
+Attach an Application Load Balancer
+
+Target group: forwards HTTP to container port 8000
+
+Public access via ALB DNS (or custom domain + ACM cert)
+
+Service: tommy-voice-worker-service
+
+Launch type: Fargate
+
+Desired count: 1+
+
+No load balancer
+
+Same VPC/subnets as API
+
+6. Networking & security
+VPC: default or custom
+
+Subnets: public for ALB, private for tasks (recommended)
+
+Security groups:
+
+ALB SG: allow inbound 80/443 from world
+
+API SG: allow inbound from ALB SG only
+
+Worker SG: no inbound from internet
+
+7. Domain & HTTPS
+Use Route 53 to point voice.tommy-nation.com → ALB.
+
+Use ACM to issue TLS cert.
+
+Attach cert to ALB listener on port 443.
+
+Your API becomes:
+
+https://voice.tommy-nation.com/tts
+
+https://voice.tommy-nation.com/voices/create
+
+8. Scaling
+API service: enable auto‑scaling based on CPU or request count.
+
+Worker service: scale based on queue depth (once you move from in‑memory jobs to Redis/SQS).
+
+For GPU models: move to ECS on EC2 with GPU instances or SageMaker for the model only.

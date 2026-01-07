@@ -1,0 +1,92 @@
+### Overview
+
+A clean, trust-first web app that guides users from **consent** to **clone creation** to **production exports**. Prioritize clear legal gates, transparent provenance, and fast, low-friction synthesis while exposing powerful controls for prosody, emotion, and multilingual output. The UI should scale from hobby users (quick zeroshot clone) to pros (fewshot finetune, dubbing, SVS) with progressive disclosure so advanced controls never overwhelm beginners.
+
+---
+
+### Key Screens
+
+#### 1. Home Dashboard
+- **Top bar**: App logo, search, user avatar, notifications, account menu.  
+- **Primary area**: Quick actions: Create Clone, Synthesize Text, Dubbing Project, Singing Project.  
+- **Recent activity**: Recent clones, recent synths, usage quota, latency SLO.  
+- **Safety panel**: Consent status, watermarking enabled toggle, abuse filter status.
+
+#### 2. Create Clone Wizard
+- **Step 1 Consent**: Upload consent docs, ID verification widget, checkbox summary of permitted uses; **required** before proceeding.  
+- **Step 2 Samples**: Upload audio or record in-browser; live quality meter (SNR, sample rate); recommended durations for zeroshot vs fewshot.  
+- **Step 3 Metadata**: Voice name, language tags, region, intended use, opt-in watermarking.  
+- **Step 4 Review**: Consent audit log preview, estimated fidelity, cost/credits, create button.
+
+#### 3. Synthesize Text Screen
+- **Input**: Text/SSML editor with inline phoneme preview and normalization suggestions.  
+- **Voice selector**: Dropdown with search, preview play, fidelity badge (Zeroshot/Fewshot).  
+- **Controls**: Emotion slider, intensity, pitch, rate, energy; advanced toggle for per-syllable emphasis.  
+- **Output**: Render queue, streaming player with stems toggle (voice, breath, background), download/export options.
+
+#### 4. Dubbing and Voice Conversion Project
+- **Upload**: Source audio/video with transcript upload or auto-transcribe.  
+- **Alignment view**: Waveform with forced-alignment markers; editable syllable timing.  
+- **Target voice**: Select clone and mapping rules (strict timing / loose timing).  
+- **Preview**: A/B compare original vs converted; timestretch controls and formant preservation slider.
+
+#### 5. Singing Studio
+- **Inputs**: MIDI upload, lyrics editor with phoneme mapping, tempo map.  
+- **Pitch editor**: Note-level F0 curves, vibrato controls, breath placement markers.  
+- **Render**: Preview with separate stems and export as mix-ready wav.
+
+#### 6. Admin and Audit
+- **Consent logs**: Tamper-evident records, download proof.  
+- **Abuse dashboard**: Blocked requests, flagged keywords, rate-limit metrics.  
+- **Model management**: Clone lifecycle (active, revoked, purged), storage usage, SLOs.
+
+---
+
+### Component Library
+
+- **Global components**: Top nav, side nav, modals, toast system, confirmation dialog with legal copy.  
+- **Audio components**: Waveform player with zoom; playhead scrub; stem mute/solo; loop region; export button.  
+- **Forms**: File uploader with drag-and-drop, progress, and quality analyzer; consent signature pad.  
+- **Controls**: Sliders with numeric input; multi-handle range for pitch/vibrato; preset chips for styles.  
+- **Editors**: SSML-aware text editor with syntax highlighting and inline validation; phoneme overlay toggle.  
+- **Status badges**: Fidelity (Low/Medium/High), Watermark (On/Off), Verification (Verified/Pending).  
+- **Accessibility helpers**: Keyboard focus ring, ARIA labels, high-contrast toggle.
+
+---
+
+### Interaction Flows and States
+
+- **Onboarding flow**: Guided tour that highlights consent, watermarking, and safety rules; sample demo clone to try without uploading.  
+- **Clone creation flow**: Validate consent → analyze audio → show quality issues → allow re-record or accept with warnings.  
+- **Synthesis flow**: Immediate preview via streaming; show latency estimate and progress bar; fallback to neutral voice on OOD input.  
+- **Error states**: Clear, actionable messages (e.g., “Sample too noisy — re-record or use noise reduction”), with inline help links.  
+- **Undo and revision**: Versioned clones and synth presets; ability to revert to previous model checkpoint.  
+- **Batch processing**: Queue UI with per-job status, retry, and bulk export.
+
+---
+
+### Visual Design and Branding
+
+- **Tone**: Confident, modern, and trustworthy — “Freedom’s voice” aesthetic.  
+- **Color palette**:  
+  - **Primary**: Deep indigo for brand headers and CTAs.  
+  - **Accent**: Warm amber for action highlights and emotion indicators.  
+  - **Neutral**: Soft grays for surfaces and cards.  
+- **Typography**: Sans-serif for UI (legible at small sizes); a humanist display for headings to convey warmth.  
+- **Iconography**: Simple line icons for audio actions; expressive glyphs for emotion presets.  
+- **Microcopy**: Short, direct, and reassuring. Example: **Consent step** — “Upload signed consent to enable cloning. This voice belongs to the signer.”  
+- **Motion**: Subtle transitions for waveform scrubbing and slider changes; avoid excessive motion for accessibility.
+
+---
+
+### Accessibility Security and Handoff
+
+- **Accessibility**: WCAG AA compliance; keyboard-first navigation; transcripts for all audio previews; captions for video dubbing previews.  
+- **Security and privacy**: End-to-end encryption for uploaded samples; ephemeral storage for raw audio until consent is verified; one-click purge that triggers model retraining purge and audit entry.  
+- **Ethics and safeguards**: Prominent watermark toggle (default on), public figure and minor detection with blocking UI, required labeling on export.  
+- **Developer handoff**: Provide a component spec with tokens (colors, spacing, typography), interactive prototypes (Figma frames), and a prioritized backlog: MVP screens, consent system, streaming synth API integration, and analytics hooks.  
+- **Performance**: Client-side caching of speaker embeddings, progressive streaming for long texts, and graceful degradation for low-bandwidth users.
+
+---
+
+I can produce a clickable Figma-style component spec and a prioritized implementation roadmap if you want a ready-to-develop package.

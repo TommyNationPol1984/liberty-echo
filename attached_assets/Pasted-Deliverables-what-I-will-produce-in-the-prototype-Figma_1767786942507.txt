@@ -1,0 +1,211 @@
+Deliverables (what I will produce in the prototype)
+Figma file structure
+
+Pages: Tokens, Components, Icons, Screens, Prototypes, Handoff.
+
+Organized layers, named frames, and component variants.
+
+Design tokens
+
+Color palette, typography scale, spacing, elevation, motion tokens, and CSS variable mapping.
+
+Component library
+
+Buttons, inputs, file uploader, waveform player, SSML editor, sliders, consent modal, clone card, queue panel, alignment editor, singing pitch editor, and admin tables — all with states and accessibility annotations.
+
+Annotated interactive screens
+
+Home Dashboard; Create Clone Wizard (Consent, Samples, Metadata, Review); Synthesize Text; Dubbing Project; Singing Studio; Admin & Audit.
+
+Each screen includes interaction notes, keyboard flows, error states, and progressive-disclosure behaviors.
+
+Interaction prototypes
+
+Clickable flows for onboarding, clone creation, streaming synth preview, alignment editing, and singing pitch edits (micro-interactions and transitions).
+
+Developer handoff artifacts
+
+Component props table, CSS token export (variables), SVG icon set, image asset export guidelines, and a JSON-style API contract stub for synth/clone/dub endpoints.
+
+Acceptance & QA
+
+Test cases (functional, accessibility, performance), MOS proxy checklist, WER/intelligibility targets, latency SLO verification steps.
+
+Roadmap & backlog
+
+Prioritized milestones, sprint-level tasks, and rough engineering estimates for frontend and backend integration points.
+
+Component & Token Details (excerpts to be included verbatim in the Figma file)
+Design tokens (CSS variable examples)
+Colors
+
+--color-primary: #1F2A6B (Deep Indigo)
+
+--color-accent: #FFB84D (Warm Amber)
+
+--neutral-1: #F5F7FA; --neutral-2: #9AA3B2; --danger: #E24B4B; --success: #2EA86A
+
+Typography
+
+--font-ui: Inter, 16px/20px
+
+--font-heading: GT America, 28px/36px
+
+--font-mono: Roboto Mono, 13px/18px
+
+Spacing
+
+4 / 8 / 16 / 24 / 32 / 48 (base 8px scale)
+
+Motion
+
+--motion-fast: 160ms ease-out; --motion-medium: 320ms ease-in-out
+
+Core components (high-level)
+TopNav: logo, global search, notifications, user menu; responsive collapse.
+
+FileUploader: drag/drop, progress bar, quality analyzer (SNR, sample rate), retry.
+
+WaveformPlayer: zoom, loop, stem mute/solo, region selection, export menu.
+
+SSMLEditor: syntax highlighting, inline phoneme preview, normalization suggestions.
+
+SliderGroup: emotion, intensity, pitch, rate, energy; numeric input; reset button.
+
+AlignmentEditor: waveform + syllable markers; drag handles; snap-to-transcript.
+
+PitchEditor (Singing): piano roll, F0 curve editor, vibrato handles, breath markers.
+
+ConsentModal: signature pad, ID upload, checklist; required gating.
+
+Screen-by-screen specs (interaction highlights)
+Home Dashboard
+Primary actions: Create Clone, Synthesize Text, Dubbing Project, Singing Project.
+
+Safety panel: Consent status, watermark toggle (default ON), abuse filter status.
+
+Quick-play: Demo clone that runs without uploading to show capabilities.
+
+Create Clone Wizard
+Step gating: Consent verification required before sample upload is accepted.
+
+Live analyzer: After upload, show SNR, sample rate, recommended duration, and “fix” suggestions (re-record, noise reduction).
+
+Fidelity estimate: Display expected fidelity badge (Zeroshot / Fewshot) and cost estimate.
+
+Synthesize Text
+Editor: SSML-aware editor with inline phoneme preview and normalization suggestions.
+
+Controls: Voice selector, emotion presets, continuous sliders (pitch, rate, energy), advanced per-syllable emphasis.
+
+Preview: Streaming playback with latency indicator; stems toggle (voice, breath, background).
+
+Export: Format selector (wav 48k/24bit, wav 24k/16bit, mp3 192–256kbps, m4a 192kbps) and loudness normalization options.
+
+Dubbing Project
+Upload: Source audio/video + transcript or auto-transcribe.
+
+Alignment view: Forced-alignment markers; editable syllable timing; strict/loose timing toggle.
+
+Mapping rules: Formant preservation slider, timestretch limits (±5–8%), and A/B compare.
+
+Singing Studio
+Inputs: MIDI upload, lyrics editor with phoneme mapping, tempo map.
+
+Pitch editor: Note-level F0 curves, vibrato depth/rate handles, breath placement markers.
+
+Render: Separate stems export and mix-ready postFX chain.
+
+Admin & Audit
+Consent logs: Tamper-evident entries, download proof, revoke/purge actions.
+
+Abuse dashboard: Blocked requests, flagged keywords, rate-limit metrics.
+
+Developer Handoff & API contract stubs
+API endpoints (stubs for devs)
+POST /api/clone
+
+Payload: { voice_name, consent_proof_id, samples: [file_refs], language_tags, region }
+
+Response: { clone_id, fidelity_estimate, status }
+
+POST /api/synthesize
+
+Payload: { text_or_ssml, voice_id, emotion, intensity, pitch, rate, format, sample_rate }
+
+Response: streaming audio URL or stream handle; job_id for async.
+
+POST /api/dub
+
+Payload: { source_audio_ref, transcript_ref, target_voice_id, timing: "strict"|"loose", formant_preserve }
+
+Response: { job_id, preview_url }
+
+POST /api/revoke
+
+Payload: { clone_id, requester_id, reason }
+
+Response: { status: "revoked", purge_job_id }
+
+Handoff files & assets
+SVG icon set (optimized), component tokens JSON, CSS variables file, and a README with naming conventions and accessibility notes.
+
+Roadmap, milestones, and acceptance criteria
+Milestone 1 — MVP UI & Consent (2 weeks)
+
+Deliver: Home, Create Clone Wizard (consent + upload analyzer), basic clone card.
+
+Acceptance: Consent gating blocks clone creation until verified; SNR analyzer returns values; pending clone created.
+
+Milestone 2 — Streaming Synth UI (3 weeks)
+
+Deliver: SSML editor, voice selector, streaming preview, basic sliders.
+
+Acceptance: Streaming preview plays within 300 ms for short prompts; downloads available.
+
+Milestone 3 — Dubbing Alpha (3 weeks)
+
+Deliver: Upload/transcribe, forced alignment editor, strict/loose timing.
+
+Acceptance: Editable alignment; A/B preview; timestretch within ±8%.
+
+Milestone 4 — Singing Studio Alpha (3 weeks)
+
+Deliver: MIDI import, pitch editor, vibrato controls, stems export.
+
+Acceptance: Note-level edits render preview; stems exportable.
+
+Milestone 5 — Admin & Safeguards (2 weeks)
+
+Deliver: Consent logs, revoke/purge UI, abuse filters.
+
+Acceptance: Tamper-evident logs; revoke triggers purge flag.
+
+Milestone 6 — Polishing & Accessibility (2 weeks)
+
+Deliver: WCAG AA fixes, performance tuning, analytics hooks.
+
+Acceptance: WCAG AA compliance; latency SLOs met.
+
+QA, Accessibility, and Security checklist (high level)
+Accessibility
+
+Keyboard-first navigation for all flows.
+
+ARIA labels for dynamic regions (synthesis progress, errors).
+
+Captions/transcripts for audio/video previews.
+
+Security & Privacy
+
+Encrypted uploads in transit and at rest.
+
+Ephemeral raw audio storage until consent verified.
+
+One-click purge that flags model retraining and storage purge.
+
+Ethics & Safeguards
+
+Watermarking default ON; public figure/minor detection with blocking UI.
+
+Required labeling on exported files: “Synthetic audio generated by AI”.

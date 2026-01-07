@@ -60,14 +60,19 @@ async def upload_voice(
     user_id: str,
     voice_name: str,
     language: str = "en",
+    voice_id: Optional[str] = None,
     sample: UploadFile = File(...)
 ):
     """
     Upload a sample audio clip for voice cloning.
     Extracts speaker embedding for later synthesis.
+    Accepts optional voice_id from Node.js to maintain ID consistency.
     """
     data = await sample.read()
-    voice_id = uuid.uuid4().hex
+    
+    # Use provided voice_id or generate new one
+    if not voice_id:
+        voice_id = uuid.uuid4().hex
     
     # Save audio file
     key = f"voices/{user_id}/{voice_id}_{sample.filename}"

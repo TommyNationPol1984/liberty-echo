@@ -1,0 +1,106 @@
+A ready-to-develop Figma component spec and prioritized implementation roadmap for Liberty Echo. This package includes tokens, reusable components, annotated Figma frames for six core screens, interaction states, accessibility notes, and a 6‑milestone rollout plan with acceptance criteria and rough engineering effort estimates.
+
+Figma Component Spec
+Design tokens
+Colors: Primary Deep Indigo #1F2A6B; Accent Warm Amber #FFB84D; Neutral-1 Soft Gray #F5F7FA; Neutral-2 Mid Gray #9AA3B2; Danger #E24B4B; Success #2EA86A.
+
+Typography: UI Inter 16/20; Heading GT America 28/36; Mono Roboto Mono 13/18 for code/SSML.
+
+Spacing: Base 8px scale (4, 8, 16, 24, 32, 48).
+
+Elevation: Card shadow 0 4px 12px rgba(16,24,40,0.06); Modal 0 12px 40px rgba(16,24,40,0.12).
+
+Motion: Duration 160ms ease-out for micro interactions; 320ms ease-in-out for panel transitions.
+
+Core components
+TopNav: logo, global search, notifications, user menu.
+
+SideNav: icon + label, collapsible, active state highlight.
+
+PrimaryButton: filled, rounded 8px, disabled state.
+
+SecondaryButton: outline, subtle hover.
+
+FileUploader: drag area, progress bar, quality meter (SNR, sample rate).
+
+WaveformPlayer: zoom, loop, stem mute/solo, export menu.
+
+SSMLEditor: syntax highlighting, inline phoneme preview toggle, validation badges.
+
+SliderGroup: emotion, intensity, pitch, rate, energy; numeric input and reset.
+
+ConsentModal: signature pad, ID upload, checklist with required items.
+
+CloneCard: thumbnail, fidelity badge, verification status, quick-play.
+
+QueuePanel: job list, status chips, retry/delete actions.
+
+AlignmentEditor: waveform + syllable markers, drag-to-adjust handles.
+
+Component states
+Loading: skeletons for lists and waveform placeholders.
+
+Error: inline error text with suggested fixes.
+
+Success: toast with download link and labeled provenance.
+
+Disabled: low-contrast controls with tooltip explaining why.
+
+Key Screens and Frames
+Home Dashboard
+Frame: Quick actions grid, recent activity feed, safety panel.
+
+Annotations: CTA priority order, quota meter, watermark default ON.
+
+Create Clone Wizard
+Frames: Consent → Samples → Metadata → Review.
+
+Interactions: Stepper with validation gating; live audio analyzer; consent audit preview.
+
+Synthesize Text
+Frame: SSML editor left, voice controls right, render queue bottom.
+
+Annotations: Streaming preview, per-syllable emphasis toggle, fallback neutral voice behavior.
+
+Dubbing Project
+Frame: Upload area, forced-alignment timeline, mapping rules modal.
+
+Interactions: Drag syllable handles; strict/loose timing toggle; A/B compare player.
+
+Singing Studio
+Frame: MIDI lane, lyrics phoneme editor, pitch curve editor.
+
+Annotations: Vibrato editor, breath markers, separate stems export.
+
+Admin and Audit
+Frame: Consent logs table, abuse dashboard, model lifecycle controls.
+
+Annotations: Tamper-evident log download, revoke/purge actions.
+
+Interaction Details and Accessibility
+Progressive disclosure: Show basic sliders by default; reveal per-syllable and LoRA options under Advanced.
+
+Keyboard flows: Full keyboard access for waveform scrubbing, slider adjustments, and modal confirmations.
+
+ARIA: All interactive controls labeled; live regions for synthesis progress and errors.
+
+Captions and transcripts: Auto-generate captions for previews; show transcript side-by-side for dubbing.
+
+Security UX: Consent step blocks clone creation until verified; clear visual state for revoked clones.
+
+Prioritized Implementation Roadmap
+Milestone	Scope	Acceptance Criteria	Estimate
+1 MVP UI & Consent	Home, Create Clone Wizard, Consent flow, File uploader	Consent gating works; upload analyzer shows SNR; create button creates pending clone	2 weeks
+2 Streaming Synth UI	SSML editor, voice selector, streaming preview, basic sliders	Streaming preview plays within 300 ms; download wav/mp3 works	3 weeks
+3 Dubbing Alpha	Upload/transcribe, forced alignment view, strict/loose timing	Alignment editable; A/B preview; timestretch within ±8%	3 weeks
+4 Singing Studio Alpha	MIDI import, lyrics editor, pitch editor, vibrato controls	Note-level edits render preview; export stems	3 weeks
+5 Admin and Safeguards	Consent logs, revoke/purge, abuse filters UI	Tamper-evident logs; revoke triggers purge flag; blocked public figure flow	2 weeks
+6 Polishing and Accessibility	Performance tuning, WCAG fixes, analytics hooks	WCAG AA; latency SLOs met; analytics events firing	2 weeks
+Handoff and Deliverables
+Figma package: Component library, six annotated frames, interaction prototypes, and exportable tokens.
+
+Developer artifacts: CSS token file, component props table, accessibility checklist, API contract stubs for synth/clone/dub endpoints.
+
+Priority backlog: Linked tasks for frontend, backend integration points, QA test cases, and monitoring SLOs.
+
+Acceptance testing: Test plan with MOS proxy checks, WER targets, and latency verification steps.

@@ -1,0 +1,500 @@
+Architecture summary
+Frontend: Next.js  + React; WebSocket for realtime audio chunks; file upload with consent flow; waveform preview.
+
+API Gateway / Backend: FastAPI with REST endpoints for voice upload/consent/voice list and a WebSocket /ws/synthesize for streaming TTS audio chunks.
+
+Model Serving: Triton client stub (or direct PyTorch) to call acoustic model + vocoder; speaker embedding extractor (ECAPA/ResNet style) as a Python module.
+
+Storage: Abstracted storage interface (S3/Blob) for source clips, embeddings, and generated audio.
+
+Safety: Consent verification, public figure / minor blocking, watermarking metadata, per-user rate limits, audit logs.
+
+1) Backend — FastAPI (Python)
+Files: backend/app/main.py, backend/app/models.py, backend/app/storage.py, backend/app/inference.py, backend/Dockerfile
+
+backend/app/main.py
+python
+# backend/app/main.py
+from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+import uuid, asyncio, logging, time
+
+from .storage import Storage
+from .inference import SpeakerEmbedder, TritonClient, stream_synthesize
+from .models import ConsentRecord, VoiceRecord
+
+app = FastAPI(title="LibertyEcho API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+storage = Storage()  # S3 / local abstraction
+embedder = SpeakerEmbedder()
+triton = TritonClient()
+
+logger = logging.getLogger("libertyecho")
+logger.setLevel(logging.INFO)
+
+# Simple in-memory stores for demo (replace with DB)
+CONSENTS: Dict[str, ConsentRecord] = {}
+VOICES: Dict[str, VoiceRecord] = {}
+
+class UploadResponse(BaseModel):
+    voice_id: str
+    message: str
+
+@app.post("/api/consent", response_model=Dict[str,str])
+async def submit_consent(name: str, user_id: str, consent_doc: UploadFile = File(...)):
+    """
+    Upload consent document (signed form + ID). Store securely and create a consent record.
+    """
+    # TODO: add verification pipeline (manual or automated)
+    key = f"consents/{user_id}/{uuid.uuid4().hex}_{consent_doc.filename}"
+    await storage.put_file(key, await consent_doc.read())
+    consent = ConsentRecord(user_id=user_id, name=name, doc_key=key, timestamp=time.time(), verified=False)
+    CONSENTS[user_id] = consent
+    logger.info("Consent submitted for user %s", user_id)
+    return {"status":"ok","message":"Consent uploaded; pending verification."}
+
+@app.post("/api/voices/upload", response_model=UploadResponse)
+async def upload_voice(user_id: str, voice_name: str, sample: UploadFile = File(...)):
+    """
+    Upload a sample audio clip for cloning. Requires prior consent verification.
+    """
+    consent = CONSENTS.get(user_id)
+    if not consent or not consent.verified:
+        raise HTTPException(status_code=403, detail="Consent not verified for this user.")
+    data = await sample.read()
+    key = f"voices/{user_id}/{uuid.uuid4().hex}_{sample.filename}"
+    await storage.put_file(key, data)
+    # Extract speaker embedding (async)
+    embedding = await embedder.extract_embedding_bytes(data)
+    voice_id = uuid.uuid4().hex
+    voice = VoiceRecord(voice_id=voice_id, user_id=user_id, name=voice_name, sample_key=key, embedding=embedding, created_at=time.time())
+    VOICES[voice_id] = voice
+    logger.info("Voice uploaded: %s by %s", voice_id, user_id)
+    return UploadResponse(voice_id=voice_id, message="Sample uploaded and embedding extracted.")
+
+@app.get("/api/voices")
+async def list_voices():
+    return [{"voice_id":v.voice_id, "name":v.name, "user_id":v.user_id} for v in VOICES.values()]
+
+@app.post("/api/voices/{voice_id}/delete")
+async def delete_voice(voice_id: str, user_id: str):
+    voice = VOICES.get(voice_id)
+    if not voice or voice.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Voice not found or unauthorized.")
+    # delete storage objects and remove record
+    await storage.delete_key(voice.sample_key)
+    VOICES.pop(voice_id, None)
+    logger.info("Voice deleted: %s", voice_id)
+    return {"status":"deleted"}
+
+@app.websocket("/ws/synthesize")
+async def ws_synthesize(ws: WebSocket):
+    """
+    WebSocket streaming synthesis:
+    Client sends JSON: {"voice_id": "...", "text": "...", "emotion": "empathetic", "format":"wav", "sample_rate":48000}
+    Server streams binary audio chunks as bytes frames with small JSON metadata frames.
+    """
+    await ws.accept()
+    try:
+        init = await ws.receive_json()
+        voice_id = init.get("voice_id")
+        text = init.get("text")
+        emotion = init.get("emotion","neutral")
+        if not voice_id or not text:
+            await ws.send_json({"error":"voice_id and text required"})
+            await ws.close()
+            return
+        voice = VOICES.get(voice_id)
+        if not voice:
+            await ws.send_json({"error":"voice not found"})
+            await ws.close()
+            return
+        # Abuse check: simple rate limit placeholder
+        # Start streaming synthesis coroutine
+        async for meta, chunk in stream_synthesize(triton, voice.embedding, text, emotion):
+            # meta: dict (e.g., {"chunk_ms":50,"progress":0.12})
+            # send metadata then binary chunk
+            await ws.send_json({"meta":meta})
+            await ws.send_bytes(chunk)
+        await ws.send_json({"meta":{"done":True}})
+        await ws.close()
+    except WebSocketDisconnect:
+        logger.info("Client disconnected during synthesis")
+    except Exception as e:
+        logger.exception("Synthesis error: %s", e)
+        await ws.send_json({"error":"internal server error"})
+        await ws.close()
+backend/app/models.py
+python
+# backend/app/models.py
+from pydantic import BaseModel
+from typing import Optional
+
+class ConsentRecord(BaseModel):
+    user_id: str
+    name: str
+    doc_key: str
+    timestamp: float
+    verified: bool = False
+
+class VoiceRecord(BaseModel):
+    voice_id: str
+    user_id: str
+    name: str
+    sample_key: str
+    embedding: bytes  # serialized embedding
+    created_at: float
+backend/app/storage.py
+python
+# backend/app/storage.py
+import aiofiles, os, asyncio
+from typing import Optional
+
+class Storage:
+    """
+    Minimal storage abstraction. Replace with aioboto3 or azure blob client in prod.
+    """
+    def __init__(self, base_dir: str = "/tmp/libertyecho_storage"):
+        self.base = base_dir
+        os.makedirs(self.base, exist_ok=True)
+
+    async def put_file(self, key: str, data: bytes):
+        path = os.path.join(self.base, key)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        async with aiofiles.open(path, "wb") as f:
+            await f.write(data)
+        return path
+
+    async def get_file(self, key: str) -> bytes:
+        path = os.path.join(self.base, key)
+        async with aiofiles.open(path, "rb") as f:
+            return await f.read()
+
+    async def delete_key(self, key: str):
+        path = os.path.join(self.base, key)
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+backend/app/inference.py
+python
+# backend/app/inference.py
+import asyncio, numpy as np, io
+from typing import AsyncGenerator, Tuple, Dict, Any
+
+class SpeakerEmbedder:
+    """
+    Placeholder for speaker embedding extraction (ECAPA/ResNet).
+    Replace with real model code.
+    """
+    async def extract_embedding_bytes(self, audio_bytes: bytes) -> bytes:
+        # Simulate embedding extraction
+        await asyncio.sleep(0.2)
+        emb = np.random.randn(192).astype(np.float32)
+        return emb.tobytes()
+
+class TritonClient:
+    """
+    Minimal Triton client stub. Replace with tritonclient.grpc.InferenceServerClient usage.
+    """
+    def __init__(self):
+        pass
+
+    async def synthesize_stream(self, embedding: bytes, text: str, emotion: str) -> AsyncGenerator[Tuple[Dict[str,Any], bytes], None]:
+        """
+        Yield (meta, chunk_bytes) pairs to simulate streaming vocoder output.
+        Replace with real streaming from acoustic model + vocoder.
+        """
+        # Simulate incremental generation
+        total_ms = 800  # pretend total audio length
+        chunk_ms = 80
+        chunks = total_ms // chunk_ms
+        for i in range(chunks):
+            # small silence or tone chunk for demo
+            chunk = (np.sin(np.linspace(0, 2*np.pi*(i+1), 1600)) * 0.1).astype(np.float32).tobytes()
+            meta = {"chunk_index": i, "chunk_ms": chunk_ms, "progress": (i+1)/chunks}
+            await asyncio.sleep(0.05)  # simulate generation latency
+            yield meta, chunk
+
+async def stream_synthesize(triton: TritonClient, embedding: bytes, text: str, emotion: str):
+    """
+    Adapter that yields (meta, chunk) for WebSocket streaming.
+    """
+    async for meta, chunk in triton.synthesize_stream(embedding, text, emotion):
+        yield meta, chunk
+backend/Dockerfile
+dockerfile
+# backend/Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/app ./app
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+Notes: requirements.txt should include fastapi, uvicorn[standard], aiofiles, pydantic, numpy. Replace Triton stub with tritonclient and GPU runtime in production.
+
+2) Frontend — Next.js + React (TypeScript)
+Files: frontend/pages/index.tsx, frontend/components/ConsentModal.tsx, frontend/lib/ws.ts, frontend/package.json, frontend/Dockerfile
+
+frontend/pages/index.tsx
+tsx
+// frontend/pages/index.tsx
+import React, { useState, useRef } from "react";
+import Head from "next/head";
+import ConsentModal from "../components/ConsentModal";
+
+export default function Home() {
+  const [userId, setUserId] = useState("user_demo");
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
+  const [text, setText] = useState("Hello, this is a demo of LibertyEcho.");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  async function uploadSample(file: File, name: string) {
+    const form = new FormData();
+    form.append("user_id", userId);
+    form.append("voice_name", name);
+    form.append("sample", file);
+    const res = await fetch("/api/proxy/voices/upload", { method: "POST", body: form });
+    const json = await res.json();
+    setVoiceId(json.voice_id);
+    alert("Uploaded sample. Voice ID: " + json.voice_id);
+  }
+
+  async function synthesize() {
+    if (!voiceId) { alert("Upload a sample first."); return; }
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/proxy/ws/synthesize`);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ voice_id: voiceId, text, emotion: "empathetic" }));
+    };
+    const chunks: Float32Array[] = [];
+    ws.onmessage = (ev) => {
+      if (typeof ev.data === "string") {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.meta?.done) {
+            // assemble and play
+            const wav = concatFloat32ToWav(chunks, 48000);
+            const blob = new Blob([wav], { type: "audio/wav" });
+            const url = URL.createObjectURL(blob);
+            if (audioRef.current) audioRef.current.src = url;
+            ws.close();
+          }
+        } catch(e) { console.error(e); }
+      } else {
+        // binary chunk
+        const arr = new Float32Array(ev.data);
+        chunks.push(arr);
+      }
+    };
+  }
+
+  return (
+    <div>
+      <Head><title>LibertyEcho Demo</title></Head>
+      <main style={{padding:20}}>
+        <h1>LibertyEcho — demo</h1>
+        <div>
+          <label>User ID: <input value={userId} onChange={e=>setUserId(e.target.value)} /></label>
+          <button onClick={()=>setConsentOpen(true)}>Upload Consent</button>
+        </div>
+        <div style={{marginTop:10}}>
+          <input type="file" id="sample" />
+          <button onClick={()=>{
+            const f = (document.getElementById("sample") as HTMLInputElement).files?.[0];
+            if (f) uploadSample(f, f.name);
+          }}>Upload Sample</button>
+        </div>
+        <div style={{marginTop:10}}>
+          <textarea value={text} onChange={e=>setText(e.target.value)} rows={4} cols={60} />
+          <button onClick={synthesize}>Synthesize</button>
+        </div>
+        <audio ref={audioRef} controls />
+        <ConsentModal open={consentOpen} onClose={()=>setConsentOpen(false)} userId={userId} />
+      </main>
+    </div>
+  );
+}
+
+/** helper: convert Float32 chunks to WAV (mono, 48k) */
+function concatFloat32ToWav(chunks: Float32Array[], sampleRate = 48000) {
+  const totalLen = chunks.reduce((s,c)=>s+c.length,0);
+  const buffer = new ArrayBuffer(44 + totalLen * 2);
+  const view = new DataView(buffer);
+  // WAV header
+  function writeString(view: DataView, offset: number, str: string) {
+    for (let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i));
+  }
+  writeString(view, 0, 'RIFF'); view.setUint32(4, 36 + totalLen*2, true);
+  writeString(view, 8, 'WAVE'); writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate*2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeString(view, 36, 'data');
+  view.setUint32(40, totalLen*2, true);
+  // PCM samples
+  let offset = 44;
+  for (const chunk of chunks) {
+    for (let i=0;i<chunk.length;i++, offset+=2) {
+      let s = Math.max(-1, Math.min(1, chunk[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+  }
+  return buffer;
+}
+frontend/components/ConsentModal.tsx
+tsx
+// frontend/components/ConsentModal.tsx
+import React, { useState } from "react";
+
+export default function ConsentModal({ open, onClose, userId }: { open:boolean, onClose:()=>void, userId:string }) {
+  const [file, setFile] = useState<File | null>(null);
+  async function submit() {
+    if (!file) return alert("Attach signed consent form.");
+    const form = new FormData();
+    form.append("name", userId);
+    form.append("user_id", userId);
+    form.append("consent_doc", file);
+    const res = await fetch("/api/proxy/consent", { method: "POST", body: form });
+    const json = await res.json();
+    alert(json.message);
+    onClose();
+  }
+  if (!open) return null;
+  return (
+    <div style={{position:"fixed",left:0,top:0,right:0,bottom:0,background:"rgba(0,0,0,0.4)"}}>
+      <div style={{width:600, margin:"80px auto", background:"#fff", padding:20}}>
+        <h3>Upload signed consent</h3>
+        <p>We require written consent and ID to create a voice clone. This demo stores the file securely.</p>
+        <input type="file" onChange={e=>setFile(e.target.files?.[0] ?? null)} />
+        <div style={{marginTop:10}}>
+          <button onClick={submit}>Submit</button>
+          <button onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+frontend/package.json (partial)
+json
+{
+  "name": "libertyecho-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+  "dependencies": { "next": "13.x", "react": "18.x", "react-dom": "18.x" }
+}
+frontend/Dockerfile
+dockerfile
+# frontend/Dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+CMD ["npm","start"]
+Note: For local dev, add a simple proxy in Next.js  pages/api/proxy/* that forwards to backend endpoints to avoid CORS during demo.
+
+3) Model integration stubs & best practices
+Speaker embedding extractor: implement ECAPA-TDNN or d-vector in inference.SpeakerEmbedder.extract_embedding_bytes. Save embeddings to storage and cache in Redis for fast lookup.
+
+Triton / GPU serving: replace TritonClient stub with tritonclient.grpc.InferenceServerClient calls. Use streaming pattern: acoustic model outputs mel frames incrementally; vocoder converts mel→waveform in small chunks and returns bytes.
+
+Low-latency design:
+
+Nonautoregressive acoustic model (FastPitch / FastSpeech2) with duration/pitch predictors.
+
+Streaming vocoder (HiFi-GAN variant) that accepts mel frames and returns 50–100 ms waveform chunks.
+
+Buffering on client: 100–200 ms.
+
+Watermarking: add inaudible watermark embedding step in vocoder output or metadata tags in storage. Provide is_watermarked flag in API responses.
+
+Safety: implement server-side checks before synthesis:
+
+Verify consent record and voice.user_id match requestor.
+
+Block cloning requests for minors or public figures (maintain denylist).
+
+Rate limit per user and per IP.
+
+Log request metadata (user_id, voice_id, text hash, timestamp) to tamper-evident audit store.
+
+4) Demo dataset spec (JSON schema)
+Use this spec to collect training/finetune data and to validate uploaded samples.
+
+json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VoiceSample",
+  "type": "object",
+  "required": ["sample_id","user_id","recording_files","transcript","sample_rate","bit_depth","consent_provided"],
+  "properties": {
+    "sample_id": {"type":"string"},
+    "user_id": {"type":"string"},
+    "recording_files": {
+      "type":"array",
+      "items": {"type":"string","format":"uri"},
+      "minItems": 1
+    },
+    "transcript": {"type":"string"},
+    "language": {"type":"string","default":"en"},
+    "sample_rate": {"type":"integer","enum":[24000,48000],"default":48000},
+    "bit_depth": {"type":"integer","enum":[16,24],"default":24},
+    "duration_seconds": {"type":"number"},
+    "noise_floor_db": {"type":"number"},
+    "microphone": {"type":"string"},
+    "style_tags": {
+      "type":"array",
+      "items":{"type":"string"},
+      "examples":["neutral","warm","excited","whisper","laughter"]
+    },
+    "consent_provided": {"type":"boolean"},
+    "consent_doc_key": {"type":"string"}
+  }
+}
+Recording guidance (human-readable):
+
+Format: 24–48 kHz, 16–24 bit PCM, mono.
+
+Noise floor: < −60 dB preferred.
+
+Content: read sentences, conversational prompts, emotional lines, and spontaneous speech; 30s–3h depending on fidelity target.
+
+Labels: time-aligned transcripts, emotion tags, language ID, phoneme alignments if available.
+
+5) Deployment & ops notes
+Multi-region: deploy inference GPU pools in 2–3 regions; use sticky sessions for streaming.
+
+Autoscaling: GPU pools with warm instances; use Kubernetes with node pools for GPU types.
+
+Monitoring: Prometheus + Grafana for latency, MOS proxy, GPU utilization.
+
+Model optimization: TensorRT / ONNX quantization for vocoder; keep FP16 for acoustic model where possible.
+
+CI/CD: build images for backend/frontend; run unit tests and integration tests that simulate WebSocket streaming.
+
+Security: TLS everywhere; signed URLs for storage; rotate keys; audit logs immutable.
+
+6) Example sprint & next steps (short)
+Sprint 0: infra + consent flow + storage + skeleton backend/frontend (1–2 weeks).
+
+Sprint 1: neutral TTS streaming prototype with stubbed model (2–3 weeks).
+
+Sprint 2: speaker embedding + zeroshot inference path (3–4 weeks).
+
+Sprint 3: emotion controls + UI sliders (3–4 weeks).
+
+Sprint 4: multilingual + dubbing + production hardening (4–6 weeks).
+
+Follow-up (one action): I can generate a ready‑to‑run CI/CD pipeline and Kubernetes manifests for the backend, frontend, and Triton GPU serving so your team can deploy this prototype to a cloud cluster.

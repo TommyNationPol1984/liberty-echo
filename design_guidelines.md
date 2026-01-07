@@ -1,7 +1,39 @@
 # LibertyEcho AI Voice Clone Generator - Design Guidelines
 
-## Design Approach
-**System-Based Approach** using Material Design principles adapted for professional audio production workflows. Drawing inspiration from Linear's clean layouts and professional audio tools like Descript and Riverside.fm for information-dense, utility-focused interfaces.
+## Brand Identity
+**Tone:** Confident, modern, and trustworthy — "Freedom's voice" aesthetic
+
+## Design Tokens
+
+### Color Palette
+| Token | Hex | HSL | Usage |
+|-------|-----|-----|-------|
+| **Primary (Deep Indigo)** | #1F2A6B | 230 55% 27% | Brand headers, CTAs, primary buttons |
+| **Accent (Warm Amber)** | #FFB84D | 38 100% 65% | Action highlights, emotion indicators, active states |
+| **Neutral-1 (Soft Gray)** | #F5F7FA | 216 33% 97% | Surfaces, cards, backgrounds |
+| **Neutral-2 (Mid Gray)** | #9AA3B2 | 218 14% 65% | Secondary text, borders |
+| **Danger** | #E24B4B | 0 73% 59% | Error states, destructive actions |
+| **Success** | #2EA86A | 149 57% 42% | Verified states, completion |
+
+### Typography
+| Role | Font | Size/Line Height |
+|------|------|------------------|
+| **UI Text** | Inter | 16px/20px |
+| **Headings** | Inter (semibold/bold) | 28px/36px |
+| **Code/SSML** | JetBrains Mono | 13px/18px |
+
+### Spacing Scale
+Base 8px scale: 4, 8, 16, 24, 32, 48
+
+### Elevation
+- **Card shadow:** 0 4px 12px rgba(16,24,40,0.06)
+- **Modal shadow:** 0 12px 40px rgba(16,24,40,0.12)
+
+### Motion
+- **Micro interactions:** 160ms ease-out
+- **Panel transitions:** 320ms ease-in-out
+
+---
 
 ## Core Design Principles
 1. **Clarity over decoration** - Every element serves a functional purpose
@@ -11,116 +43,121 @@
 
 ---
 
-## Typography System
-**Font Stack:** Inter (primary), JetBrains Mono (code/technical)
-
-**Hierarchy:**
-- **Headings:** font-semibold to font-bold, leading-tight
-- **H1:** text-3xl to text-4xl
-- **H2:** text-2xl to text-3xl  
-- **H3:** text-xl to text-2xl
-- **Body:** text-base, font-normal, leading-relaxed
-- **Labels:** text-sm, font-medium, tracking-tight
-- **Captions/metadata:** text-xs to text-sm, font-normal
-
----
-
-## Layout System
-**Spacing Primitives:** Tailwind units of **2, 4, 6, 8, 12, 16**
-- Tight spacing: p-2, gap-2 (within cards)
-- Standard spacing: p-4, gap-4 (between elements)
-- Section spacing: p-8, py-12 (major areas)
-- Page margins: px-6 to px-8
-
-**Grid System:** 
-- Main app: Two-column split (sidebar navigation 280px + main content area)
-- Content grids: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 for voice cards
-- Forms: Single column max-w-2xl for optimal scanning
-
----
-
 ## Component Library
 
 ### Navigation
 **Primary Sidebar:**
 - Fixed left navigation (w-64 to w-72)
 - Sections: Dashboard, Voices, Consent, Synthesis, History
-- Active state: Subtle background fill with left border accent
-- Icons: 20px size from Heroicons (outline style)
+- Active state: Deep Indigo background with Amber left border accent
+- Icons: 20px size from Lucide (outline style)
 
 **Top Bar:**
 - User profile dropdown (right)
-- Current workspace/project indicator (left)
+- Theme toggle
 - Quick action button (+ New Voice)
 
+### Core Components
+| Component | Description |
+|-----------|-------------|
+| **TopNav** | Logo, global search, notifications, user menu |
+| **SideNav** | Icon + label, collapsible, active state highlight |
+| **PrimaryButton** | Deep Indigo filled, rounded-md, disabled state |
+| **SecondaryButton** | Outline style, subtle hover |
+| **FileUploader** | Drag area, progress bar, quality meter (SNR, sample rate) |
+| **WaveformPlayer** | Zoom, loop, stem mute/solo, export menu |
+| **SSMLEditor** | Syntax highlighting, inline phoneme preview, validation badges |
+| **SliderGroup** | Emotion, intensity, pitch, rate, energy; numeric input and reset |
+| **ConsentModal** | Signature pad, ID upload, checklist with required items |
+| **CloneCard** | Thumbnail, fidelity badge, verification status, quick-play |
+| **QueuePanel** | Job list, status chips, retry/delete actions |
+
+### Component States
+- **Loading:** Skeleton screens for voice cards
+- **Error:** Inline error text with suggested fixes
+- **Success:** Toast with download link
+- **Disabled:** Low-contrast controls with tooltip
+
 ### Voice Management Cards
-**Voice Library Grid:**
 - Card design with voice waveform preview thumbnail
 - Voice name (font-semibold, text-lg)
-- Metadata row: Duration • Language • Created date (text-sm)
-- Action buttons: Play • Edit • Clone • Delete (icon buttons)
-- Hover: Subtle elevation increase (shadow-md to shadow-lg)
-
-### Consent Flow
-**Multi-step Form:**
-- Progress indicator: Stepped dots at top showing (1) Identity → (2) Upload → (3) Verification
-- Clear section headers with descriptive subtext
-- File upload zone: Dashed border, drag-and-drop area with icon
-- Document preview after upload
-- Status badges: Pending • Verified • Rejected (rounded-full, px-3, py-1)
+- Metadata row: Duration, Language, Created date (text-sm)
+- Action buttons: Play, Edit, Clone, Delete (icon buttons)
+- Hover: Subtle elevation increase
 
 ### Synthesis Interface
 **Main Control Panel:**
 - Large text input area (textarea min-h-48, rounded-lg border)
 - Voice selector dropdown with avatar thumbnails
-- Emotion/style slider controls (horizontal sliders with labels)
-- Format selector: Pills/tabs for WAV/MP3/M4A
-- Large "Generate" CTA button (w-full on mobile, fixed width on desktop)
+- Emotion/style slider controls (8 emotions: neutral, joyful, sad, angry, empathetic, serious, excited, calm)
+- Intensity slider (0.0 to 1.0)
+- Pitch and Rate controls
+- Format selector: WAV/MP3/M4A pills
+- Large "Generate" CTA button with Warm Amber accent
 
 **Real-time Monitor:**
-- Waveform visualization canvas (live updating during synthesis)
-- Progress bar with percentage and time remaining
-- Audio player controls below waveform (custom styled)
+- Waveform visualization canvas
+- Progress bar with percentage
+- Audio player controls below waveform
 
-### Data Display
-**Voice History Table:**
-- Columns: Timestamp • Text Preview • Voice • Duration • Status • Actions
-- Row hover: Background highlight
-- Sortable headers with caret indicators
-- Pagination: Minimal style with page numbers + arrows
+### Status Badges
+| Badge | Color | Usage |
+|-------|-------|-------|
+| **Fidelity High** | Success green | Voice quality indicator |
+| **Fidelity Medium** | Amber | Voice quality indicator |
+| **Fidelity Low** | Warning | Voice quality indicator |
+| **Watermark On** | Primary | Security indicator |
+| **Verified** | Success | Consent status |
+| **Pending** | Amber | Consent status |
 
-### Forms & Inputs
-**Input Fields:**
-- Border style: border rounded-lg focus:ring-2 focus:ring-offset-2
-- Label positioning: Above input, text-sm font-medium mb-2
-- Helper text: Below input, text-xs
-- Error states: Red border + icon + message
+---
 
-**File Upload:**
-- Dropzone: Dashed border-2, rounded-lg, p-8
-- Center-aligned icon + "Drag & drop or click to browse"
-- File preview cards with remove button
-- Progress bar for uploads
+## Key Screens
 
-**Sliders:**
-- Range inputs for emotion intensity, pitch, rate
-- Value labels updating in real-time
-- Tick marks for preset values
+### 1. Home Dashboard
+- Quick actions: Create Clone, Synthesize Text, Dubbing Project, Singing Project
+- Recent activity: Recent clones, recent synths, usage quota
+- Safety panel: Consent status, watermarking toggle, abuse filter status
 
-### Modals & Overlays
-**Modal Structure:**
-- Centered overlay with backdrop blur
-- max-w-2xl container with rounded-xl
-- Header: Title + close button, border-b
-- Body: Scrollable content with py-6
-- Footer: Action buttons right-aligned with gap-3
+### 2. Create Clone Wizard
+- **Step 1 Consent:** Upload consent docs, checkbox summary of permitted uses
+- **Step 2 Samples:** Upload audio or record in-browser; live quality meter
+- **Step 3 Metadata:** Voice name, language tags, region, intended use
+- **Step 4 Review:** Consent audit log preview, estimated fidelity, create button
 
-**Toast Notifications:**
-- Fixed positioning top-right
-- Slide-in animation
-- Auto-dismiss after 5s
-- Icon + message + close button
-- Types: Success • Error • Warning • Info
+### 3. Synthesize Text Screen
+- Input: Text/SSML editor with inline phoneme preview
+- Voice selector: Dropdown with search, preview play, fidelity badge
+- Controls: Emotion slider, intensity, pitch, rate, energy
+- Output: Streaming player, download/export options
+
+### 4. Dubbing Project (Future)
+- Upload: Source audio/video with transcript
+- Alignment view: Waveform with forced-alignment markers
+- Target voice: Select clone and mapping rules
+
+### 5. Singing Studio (Future)
+- Inputs: MIDI upload, lyrics editor with phoneme mapping
+- Pitch editor: Note-level F0 curves, vibrato controls
+- Render: Preview with separate stems
+
+### 6. Admin and Audit (Future)
+- Consent logs: Tamper-evident records, download proof
+- Abuse dashboard: Blocked requests, flagged keywords
+- Model management: Clone lifecycle
+
+---
+
+## Layout System
+**Spacing Primitives:** Tailwind units of 2, 4, 6, 8, 12, 16
+- Tight spacing: p-2, gap-2 (within cards)
+- Standard spacing: p-4, gap-4 (between elements)
+- Section spacing: p-8, py-12 (major areas)
+
+**Grid System:** 
+- Main app: Two-column split (sidebar 280px + main content)
+- Content grids: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 for voice cards
+- Forms: Single column max-w-2xl for optimal scanning
 
 ---
 
@@ -136,29 +173,6 @@
 - Sidebar collapses to bottom tab navigation
 - Cards stack vertically with full width
 - Sliders become larger touch targets
-- Tables convert to stacked card views
-
----
-
-## Images & Visual Assets
-
-**No Large Hero Image** - This is a web application, not a marketing site.
-
-**Icon Usage:**
-- Heroicons throughout (24px for headers, 20px for navigation, 16px inline)
-- Microphone icon for voice recording
-- Waveform icon for audio files
-- Shield icon for consent/security
-- Globe icon for multilingual features
-
-**Waveform Visualizations:**
-- Canvas-based real-time audio waveforms
-- Spectral visualizations for voice analysis
-- Subtle grid background for reference
-
-**Avatar Placeholders:**
-- Circular avatars for voice profiles (w-10 h-10 to w-12 h-12)
-- Initials or voice icon when no custom image
 
 ---
 
@@ -168,22 +182,11 @@
 - ARIA labels on icon-only buttons
 - Keyboard navigation support for all controls
 - Screen reader announcements for synthesis progress
-- Form validation messages associated with inputs
 
 ---
 
-## Application States
-**Loading States:**
-- Skeleton screens for voice cards during load
-- Spinner overlays for synthesis in progress
-- Progress bars with percentage for uploads
-
-**Empty States:**
-- Illustration + heading + descriptive text + CTA
-- "No voices yet" → Upload your first voice sample
-- "No synthesis history" → Generate your first audio
-
-**Error States:**
-- Error boundary fallbacks
-- Inline error messages with recovery actions
-- Network error banner with retry button
+## Interactions
+- Subtle transforms on hover (extremely subtle, just noticeable)
+- Use hover-elevate and active-elevate-2 utility classes
+- No layout changes on hover
+- Progressive disclosure: Show basic controls by default, reveal advanced under toggle

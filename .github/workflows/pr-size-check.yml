@@ -1,0 +1,33 @@
+name: PR Size Check
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  pr-size-check:
+    name: Enforce PR size limit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check changed lines
+        env:
+          MAX_CHANGED_LINES: "800"
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          CHANGED_LINES=$(git diff --shortstat "origin/${{ github.base_ref }}...HEAD" | awk '{inserted=0; deleted=0; for (i=1; i<=NF; i++) { if ($(i+1) == "insertion(+)" || $(i+1) == "insertions(+)") inserted=$i; if ($(i+1) == "deletion(-)" || $(i+1) == "deletions(-)") deleted=$i } print inserted + deleted }')
+          CHANGED_LINES=${CHANGED_LINES:-0}
+          echo "Changed lines: ${CHANGED_LINES}"
+          echo "Limit: ${MAX_CHANGED_LINES}"
+          if [ "${CHANGED_LINES}" -gt "${MAX_CHANGED_LINES}" ]; then
+            echo "::error::PR is too large (${CHANGED_LINES} changed lines). Please split it into smaller PRs under ${MAX_CHANGED_LINES} changed lines."
+            exit 1
+          fi
+      - name: Summarize PR size
+        run: |
+          echo "### PR size check" >> "$GITHUB_STEP_SUMMARY"
+          echo "Limit: 800 changed lines" >> "$GITHUB_STEP_SUMMARY"
+          echo "Result: pass" >> "$GITHUB_STEP_SUMMARY"

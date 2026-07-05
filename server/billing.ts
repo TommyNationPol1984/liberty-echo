@@ -47,7 +47,7 @@ function appendParam(params: URLSearchParams, key: string, value: string | numbe
 async function postStripeForm<T>(
   path: string,
   params: URLSearchParams,
-  idempotencyKey = randomUUID(),
+  idempotencyKey: string = randomUUID(),
 ): Promise<T> {
   if (!STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is not set");

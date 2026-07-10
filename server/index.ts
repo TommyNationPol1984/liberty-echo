@@ -1,9 +1,12 @@
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupAuth } from "./auth";
 import { setupBilling } from "./billing";
+import { requireSupabaseAuth, type AuthenticatedRequest } from "./middleware/auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,6 +22,44 @@ declare module "express-serve-static-core" {
     user?: import("../shared/schema").User;
   }
 }
+
+// Security: Helmet middleware (prevents XSS, clickjacking, etc.)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// CORS: Strict allowlist (fail-closed)
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173,https://liberty-echo.app").split(",");
+app.use((req, res, next) => {
+  const origin = req.headers.origin || "";
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  }
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// Rate limiting: 20 requests per minute
+const synthesizeRateLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000"),
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "20"),
+  message: "Too many synthesis requests, please try again later",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 app.use(
   express.json({
@@ -68,6 +109,23 @@ app.use((req, res, next) => {
 (async () => {
   setupAuth(app);
   setupBilling(app);
+  
+  // Protected routes: Require Supabase JWT on all /api/* endpoints (except public ones)
+  app.use("/api", (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // Public endpoints (no auth required)
+    const publicEndpoints = ["/api/tts-health", "/api/voices"];
+    if (publicEndpoints.includes(req.path)) {
+      next();
+      return;
+    }
+
+    // All other /api endpoints require auth
+    requireSupabaseAuth(req, res, next);
+  });
+
+  // Apply rate limiting to /api/synthesize
+  app.use("/api/synthesize", synthesizeRateLimiter);
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

@@ -5,8 +5,12 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import express from "express";
+import { AuthenticatedRequest } from "./middleware/auth";
+import { SynthesizeRequestSchema, type SynthesizeResponse } from "./schemas/apiSchemas";
+import { AudioEngine } from "./audio";
 
 const TTS_ENGINE_URL = process.env.TTS_ENGINE_URL || "http://localhost:8000";
+const FORCE_PRODUCTION_GUARDS = process.env.FORCE_PRODUCTION_GUARDS === "true" || process.env.NODE_ENV === "production";
 
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -30,7 +34,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-
   app.use("/uploads", express.static(uploadDir));
 
   app.get("/api/tts-health", async (req, res) => {
@@ -57,7 +60,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/voices/:id", async (req, res) => {
+  app.get("/api/voices/:id", async (req: AuthenticatedRequest, res) => {
     try {
       const voice = await storage.getVoice(req.params.id);
       if (!voice) {
@@ -70,15 +73,18 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/voices/upload", upload.single("sample"), async (req, res) => {
+  // FIXED: Remove userId from body, use JWT user ID
+  app.post("/api/voices/upload", upload.single("sample"), async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No audio file provided" });
       }
 
-      const { name, language, userId } = req.body;
-      if (!name || !userId) {
-        return res.status(400).json({ message: "Name and userId are required" });
+      const { name, language } = req.body;
+      const userId = req.user!.id; // Use JWT user ID, NOT from request body
+
+      if (!name) {
+        return res.status(400).json({ message: "Name is required" });
       }
 
       const duration = Math.floor(Math.random() * 120) + 30;
@@ -120,11 +126,16 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/voices/:id", async (req, res) => {
+  app.delete("/api/voices/:id", async (req: AuthenticatedRequest, res) => {
     try {
       const voice = await storage.getVoice(req.params.id);
       if (!voice) {
         return res.status(404).json({ message: "Voice not found" });
+      }
+
+      // Verify ownership
+      if (voice.userId !== req.user!.id) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       if (voice.sampleKey) {
@@ -142,25 +153,29 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/consents", async (req, res) => {
+  app.get("/api/consents", async (req: AuthenticatedRequest, res) => {
     try {
       const consents = await storage.getConsents();
-      res.json(consents);
+      // Filter to user's own consents
+      const userConsents = consents.filter((c: any) => c.userId === req.user!.id);
+      res.json(userConsents);
     } catch (error) {
       console.error("Error fetching consents:", error);
       res.status(500).json({ message: "Failed to fetch consents" });
     }
   });
 
-  app.post("/api/consents", upload.single("document"), async (req, res) => {
+  app.post("/api/consents", upload.single("document"), async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No document provided" });
       }
 
-      const { name, userId } = req.body;
-      if (!name || !userId) {
-        return res.status(400).json({ message: "Name and userId are required" });
+      const { name } = req.body;
+      const userId = req.user!.id; // Use JWT user ID, NOT from request body
+
+      if (!name) {
+        return res.status(400).json({ message: "Name is required" });
       }
 
       const consent = await storage.createConsent({
@@ -178,11 +193,16 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/consents/:id/verify", async (req, res) => {
+  app.patch("/api/consents/:id/verify", async (req: AuthenticatedRequest, res) => {
     try {
       const consent = await storage.getConsent(req.params.id);
       if (!consent) {
         return res.status(404).json({ message: "Consent not found" });
+      }
+
+      // Verify ownership
+      if (consent.userId !== req.user!.id) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       await storage.updateConsentStatus(req.params.id, true);
@@ -193,22 +213,62 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/history", async (req, res) => {
+  app.get("/api/history", async (req: AuthenticatedRequest, res) => {
     try {
       const records = await storage.getSynthesisRecords();
-      res.json(records);
+      // Filter to user's own records
+      const userRecords = records.filter((r: any) => r.userId === req.user!.id);
+      res.json(userRecords);
     } catch (error) {
       console.error("Error fetching history:", error);
       res.status(500).json({ message: "Failed to fetch history" });
     }
   });
 
-  app.post("/api/synthesize", async (req, res) => {
+  app.get("/api/usage/stats", async (req: AuthenticatedRequest, res) => {
     try {
-      const { voiceId, text, emotion, intensity, rate, pitch, format } = req.body;
+      const records = await storage.getSynthesisRecords();
+      const userRecords = records.filter((r: any) => r.userId === req.user!.id);
+      
+      const totalCharsUsed = userRecords.reduce((sum: number, r: any) => sum + (r.text?.length || 0), 0);
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const monthlyCharsUsed = userRecords
+        .filter((r: any) => new Date(r.createdAt) >= monthStart)
+        .reduce((sum: number, r: any) => sum + (r.text?.length || 0), 0);
 
-      if (!voiceId || !text) {
-        return res.status(400).json({ message: "voiceId and text are required" });
+      const monthlyCharsLimit = 100000; // Default; should come from user_entitlements in real impl
+
+      res.json({
+        userId: req.user!.id,
+        totalCharsUsed,
+        monthlyCharsUsed,
+        monthlyCharsLimit,
+        charsRemaining: Math.max(0, monthlyCharsLimit - monthlyCharsUsed),
+      });
+    } catch (error) {
+      console.error("Error fetching usage stats:", error);
+      res.status(500).json({ message: "Failed to fetch usage stats" });
+    }
+  });
+
+  // FIXED: Remove userId from body, use JWT user ID, enforce WAV, single usage log
+  app.post("/api/synthesize", async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user!.id; // Use JWT user ID
+      
+      // Validate request body
+      const parseResult = SynthesizeRequestSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parseResult.error });
+      }
+
+      const { voiceId, text, audioFormat, speed, pitch } = parseResult.data;
+
+      // Enforce WAV-only output
+      if (audioFormat !== "wav") {
+        return res.status(400).json({ message: "Only WAV format is supported" });
       }
 
       const voice = await storage.getVoice(voiceId);
@@ -216,16 +276,21 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Voice not found" });
       }
 
+      // Verify voice ownership (optional, for consent-first workflows)
+      if (voice.userId && voice.userId !== userId) {
+        return res.status(403).json({ message: "Voice not available" });
+      }
+
       const record = await storage.createSynthesisRecord({
-        userId: "demo_user",
+        userId,
         voiceId,
         voiceName: voice.name,
         text,
-        emotion: emotion || "neutral",
-        intensity: intensity || 0.5,
-        rate: rate || 1.0,
-        pitch: pitch || 1.0,
-        format: format || "wav",
+        emotion: "neutral",
+        intensity: 0.5,
+        rate: speed || 1.0,
+        pitch: pitch || 0,
+        format: "wav", // Force WAV
         duration: 0,
         audioKey: null,
         status: "processing",
@@ -239,11 +304,11 @@ export async function registerRoutes(
           body: JSON.stringify({
             voice_id: voiceId,
             text,
-            emotion: emotion || "neutral",
-            intensity: intensity || 0.5,
-            rate: rate || 1.0,
-            pitch: pitch || 1.0,
-            format: format || "wav",
+            emotion: "neutral",
+            intensity: 0.5,
+            rate: speed || 1.0,
+            pitch: pitch || 0,
+            format: "wav",
           }),
         });
 
@@ -253,37 +318,45 @@ export async function registerRoutes(
           
           await storage.updateSynthesisStatus(record.id, "completed", ttsResult.synthesis_id);
 
-          res.json({
-            synthesis_id: record.id,
-            status: "completed",
-            duration: durationSeconds,
+          // SINGLE usage log (no double-counting)
+          // In production, this would INSERT into api_usage table via Supabase RPC
+          console.log(`[USAGE] user=${userId} chars=${text.length} endpoint=/api/synthesize`);
+
+          const response: SynthesizeResponse = {
             audioUrl: `/api/audio/${record.id}`,
-            message: "Synthesis completed successfully",
-          });
+            duration: durationSeconds,
+            format: "wav",
+            usageChars: text.length,
+          };
+          res.json(response);
         } else {
           const estimatedDuration = Math.ceil(text.length / 15);
           await storage.updateSynthesisStatus(record.id, "completed", `fallback_${record.id}`);
 
-          res.json({
-            synthesis_id: record.id,
-            status: "completed",
-            duration: estimatedDuration,
+          console.log(`[USAGE] user=${userId} chars=${text.length} endpoint=/api/synthesize`);
+
+          const response: SynthesizeResponse = {
             audioUrl: `/api/audio/${record.id}`,
-            message: "Synthesis completed (fallback mode)",
-          });
+            duration: estimatedDuration,
+            format: "wav",
+            usageChars: text.length,
+          };
+          res.json(response);
         }
       } catch (ttsError) {
         console.log("TTS engine not available, using fallback:", ttsError);
         const estimatedDuration = Math.ceil(text.length / 15);
         await storage.updateSynthesisStatus(record.id, "completed", `fallback_${record.id}`);
 
-        res.json({
-          synthesis_id: record.id,
-          status: "completed",
-          duration: estimatedDuration,
+        console.log(`[USAGE] user=${userId} chars=${text.length} endpoint=/api/synthesize`);
+
+        const response: SynthesizeResponse = {
           audioUrl: `/api/audio/${record.id}`,
-          message: "Synthesis completed (fallback mode)",
-        });
+          duration: estimatedDuration,
+          format: "wav",
+          usageChars: text.length,
+        };
+        res.json(response);
       }
     } catch (error) {
       console.error("Error synthesizing:", error);
@@ -291,11 +364,16 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/audio/:id", async (req, res) => {
+  app.get("/api/audio/:id", async (req: AuthenticatedRequest, res) => {
     try {
       const record = await storage.getSynthesisRecord(req.params.id);
       if (!record) {
         return res.status(404).json({ message: "Audio not found" });
+      }
+
+      // Verify ownership
+      if (record.userId !== req.user!.id) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       if (record.audioKey && !record.audioKey.startsWith("fallback_")) {
@@ -306,7 +384,10 @@ export async function registerRoutes(
               "Content-Type": "audio/wav",
             });
             const arrayBuffer = await audioResponse.arrayBuffer();
-            res.send(Buffer.from(arrayBuffer));
+            const buffer = Buffer.from(arrayBuffer);
+            // Validate WAV
+            AudioEngine.validateWAV(buffer);
+            res.send(buffer);
             return;
           }
         } catch (audioError) {
@@ -325,11 +406,16 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/history/:id", async (req, res) => {
+  app.delete("/api/history/:id", async (req: AuthenticatedRequest, res) => {
     try {
       const record = await storage.getSynthesisRecord(req.params.id);
       if (!record) {
         return res.status(404).json({ message: "Record not found" });
+      }
+
+      // Verify ownership
+      if (record.userId !== req.user!.id) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       await storage.deleteSynthesisRecord(req.params.id);

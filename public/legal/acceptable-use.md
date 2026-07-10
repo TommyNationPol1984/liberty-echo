@@ -1,44 +1,12 @@
 # Acceptable Use Policy
 
-## Liberty Echo Acceptable Use Terms
+Liberty Echo prohibits:
 
-### Prohibited Uses
+1. **Impersonation** — Creating audio to impersonate real people
+2. **Copyright infringement** — Generating audio from copyrighted text
+3. **Harassment** — Using audio to harass or threaten others
+4. **Fraud** — Creating synthetic media for financial fraud
+5. **Illegal content** — Violating applicable laws
+6. **Abuse** — Attempting to hack, DoS, or disrupt services
 
-You may NOT use Liberty Echo to:
-
-1. **Impersonate or Deceive**
-   - Create clones of real people's voices without consent
-   - Use audio to fraud, catfish, or manipulate others
-   - Create deepfakes for misinformation or propaganda
-
-2. **Violate Rights**
-   - Infringe copyright or intellectual property
-   - Violate privacy or data protection laws (GDPR, CCPA, etc.)
-   - Harass, defame, or threaten individuals
-
-3. **Illegal Activities**
-   - Money laundering, sanctions evasion
-   - Unlicensed financial services
-   - Child safety violations
-
-4. **Technical Abuse**
-   - Circumvent our rate limits or authentication
-   - Reverse-engineer our models
-   - Export or redistribute our technology
-
-### Enforcement
-
-Violations may result in:
-
-- Immediate account suspension
-- Deletion of all voice profiles and synthesis history
-- Legal action if required
-- Reporting to law enforcement (if applicable)
-
-### Reporting
-
-If you discover a violation, report it to: **abuse@liberty-echo.app**
-
----
-
-**Last Updated**: 2026-07-10
+**Violations result in account suspension and potential legal action.**

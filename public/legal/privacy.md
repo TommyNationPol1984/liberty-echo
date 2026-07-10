@@ -1,55 +1,26 @@
 # Privacy Policy
 
-## Liberty Echo Privacy Policy
+## Data We Collect
 
-### Information We Collect
+- **Account:** email, password hash, profile
+- **Voice data:** audio samples, embeddings, metadata
+- **Usage:** API calls, synthesis requests, feature usage
+- **Technical:** IP address, user agent, logs
 
-1. **Account Information**: Email, authentication data
-2. **Voice Data**: Voice samples and cloned voice profiles
-3. **Usage Data**: Synthesis requests, API calls, session history
-4. **Compliance Data**: Audit logs of voice usage and consent
+## Data Retention
 
-### How We Use Your Data
+- **Voice embeddings:** Until consent withdrawn (max 2 years)
+- **Usage logs:** 13 months
+- **Payment records:** 7 years (legal obligation)
+- **Account data:** Life of account + 1 year after deletion
 
-- **Service Delivery**: To synthesize speech and manage your account
-- **Security**: To detect fraud and enforce our policies
-- **Compliance**: To maintain audit logs and demonstrate consent
-- **Analytics**: To improve our service (anonymized only)
+## Your Rights (GDPR/CCPA)
 
-### Data Retention
+- **Access:** Request all data in portable format
+- **Deletion:** Request removal of personal data
+- **Correction:** Update incorrect information
+- **Opt-out:** Disable non-essential tracking
 
-- **Voice Profiles**: Retained until you delete them
-- **Session History**: Retained for 1 year, then deleted
-- **Audit Logs**: Retained for 7 years (regulatory requirement)
-- **Account Data**: Deleted within 30 days of account deletion
+## Contact
 
-### Your Rights
-
-Under GDPR/CCPA, you have the right to:
-
-- **Access**: Request a copy of your data
-- **Correction**: Fix inaccurate data
-- **Deletion**: Delete your data (except legally required audit logs)
-- **Portability**: Export your data in a standard format
-- **Objection**: Opt out of non-essential processing
-
-### Third-Party Sharing
-
-We do NOT share your voice data with:
-
-- Marketing or advertising partners
-- Data brokers
-- Researchers or external AI labs
-
-We MAY share data with:
-
-- Law enforcement (with legal process)
-- Service providers (cloud storage, auth providers) under data processing agreements
-
-### Contact
-
-For privacy inquiries: **privacy@liberty-echo.app**
-
----
-
-**Last Updated**: 2026-07-10
+DPA inquiries: privacy@libertyecho.app

@@ -1,38 +1,24 @@
-# Voice Consent Agreement
+# Voice Cloning Consent
 
-## Liberty Echo Voice Cloning & Consent Framework
+## Biometric Data Processing
 
-### 1. What You're Consenting To
+Liberty Echo processes your voice as biometric data under GDPR Article 9 (Special Categories).
 
-When you create a voice profile on Liberty Echo, you are consenting to:
+By consenting, you explicitly allow us to:
+1. Record and analyze your voice
+2. Create voice embeddings (mathematical representations)
+3. Train cloning models on your voice
+4. Store these embeddings in encrypted databases
 
-- **Voice Recording**: Uploading a voice sample (minimum 30 seconds)
-- **Voice Cloning**: Our technology will analyze and create a digital clone of your voice
-- **Synthesis**: We will generate speech in your voice based on your text input
-- **Storage**: Your voice profile will be stored securely on our servers
+## Your Rights
 
-### 2. Your Rights
+- **Withdraw consent** at any time in Settings
+- **Request deletion** of all voice data (GDPR Art. 17)
+- **Access your data** in machine-readable format (GDPR Art. 15)
 
-- **Revocation**: You can delete your voice profile at any time, which permanently removes it from our servers
-- **Portability**: You can request a copy of your voice profile data
-- **Non-Commercial**: Your voice may only be used for purposes you explicitly authorize
+## Retention
 
-### 3. Restrictions
+We retain your voice embeddings until you withdraw consent.
+After withdrawal, deletion occurs within 30 days.
 
-You agree NOT to:
-
-- Create voice clones of other people without their explicit consent
-- Use voice synthesis to impersonate someone for fraud or deception
-- Violate anyone's privacy rights or intellectual property
-- Bypass our consent verification mechanisms
-
-### 4. Our Commitments
-
-- We store voice data with encryption at rest and in transit
-- We do not sell or share your voice data with third parties
-- We comply with GDPR, CCPA, and applicable data protection laws
-- We provide audit logs of all voice synthesis activity
-
----
-
-**Last Updated**: 2026-07-10
+**By clicking "I consent," you agree to the above terms.**
